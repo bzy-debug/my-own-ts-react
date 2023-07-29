@@ -10,7 +10,7 @@ declare namespace JSX {
 
 type DidactElement = {
   type: string;
-  props: Record<string, unknown>;
+  props: Record<string, unknown> & { children: DidactElement[] };
 };
 
 function createElement(
@@ -43,10 +43,39 @@ function createTextElement(text: string): DidactElement {
   };
 }
 
+function render(element: DidactElement, container: HTMLElement | Text) {
+  const dom =
+    element.type === "TEXT_ELEMENT"
+      ? document.createTextNode("")
+      : document.createElement(element.type);
+
+  const isProperty = (key: string) => key !== "children";
+  Object.keys(element.props)
+    .filter(isProperty)
+    .forEach((name) => {
+      (dom as any)[name] = element.props[name];
+    });
+
+  element.props.children.forEach((child) => render(child, dom));
+
+  container.appendChild(dom);
+}
+
 const Didact = {
   createElement,
+  render,
 };
 
-const element = <h1>Hello World</h1>;
+(window as any).Didact = Didact;
+
+const element = (
+  <div>
+    <h1>Hello World</h1>
+    <label htmlFor="search">Search: </label>
+    <input type="text" id="search" />
+  </div>
+);
 
 const container = document.getElementById("app")!;
+
+Didact.render(element, container);
