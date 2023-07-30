@@ -43,38 +43,120 @@ function createTextElement(text: string): DidactElement {
   };
 }
 
-function render(element: DidactElement, container: HTMLElement) {
+function createDom(fiber: Fiber): Node | undefined {
+  if (!fiber.type) return;
+
   const dom =
-    element.type === "TEXT_ELEMENT"
+    fiber.type === "TEXT_ELEMENT"
       ? document.createTextNode("")
-      : document.createElement(element.type);
+      : document.createElement(fiber.type);
 
   const isProperty = (key: string) => key !== "children";
-  Object.keys(element.props)
+  Object.keys(fiber.props)
     .filter(isProperty)
     .forEach((name) => {
-      (dom as any)[name] = element.props[name];
+      (dom as any)[name] = fiber.props[name];
     });
 
-  element.props.children.forEach((child) => render(child, dom as HTMLElement));
-
-  container.appendChild(dom);
+  return dom;
 }
 
-// let nextUnitOfWork = null;
+type Fiber = DidactElement & {
+  dom: Node | null;
+  parent: Fiber | null;
+  sibling: Fiber | null;
+  child: Fiber | null;
+};
 
-// function workLoop(deadline: IdleDeadline) {
-//   let shouldYield = false;
-//   while (nextUnitOfWork && !shouldYield) {
-//     nextUnitOfWork = performUnitOfWork(nextUnitOfWork);
-//     shouldYield = deadline.timeRemaining() < 1;
-//   }
-//   requestIdleCallback(workLoop);
-// }
+function commitRoot() {
+  commitWork(wipRoot);
+  wipRoot = null;
+}
 
-// requestIdleCallback(workLoop);
+function commitWork(fiber: Fiber | null) {
+  if (!fiber) return;
 
-// function performUnitOfWork(nextUnitOfWork) {}
+  fiber.parent?.dom?.appendChild(fiber.dom!);
+  commitWork(fiber.child);
+  commitWork(fiber.sibling);
+}
+
+function render(element: DidactElement, container: HTMLElement) {
+  wipRoot = {
+    type: "root",
+    props: {
+      children: [element],
+    },
+    dom: container,
+    parent: null,
+    child: null,
+    sibling: null,
+  };
+
+  nextUnitOfWork = wipRoot;
+}
+
+let nextUnitOfWork: null | Fiber = null;
+let wipRoot: null | Fiber = null;
+
+function workLoop(deadline: IdleDeadline) {
+  let shouldYield = false;
+  while (nextUnitOfWork && !shouldYield) {
+    nextUnitOfWork = performUnitOfWork(nextUnitOfWork);
+    shouldYield = deadline.timeRemaining() < 1;
+  }
+
+  if (!nextUnitOfWork && wipRoot) {
+    commitRoot();
+  }
+
+  requestIdleCallback(workLoop);
+}
+
+requestIdleCallback(workLoop);
+
+function performUnitOfWork(fiber: Fiber): Fiber | null {
+  if (!fiber.dom) {
+    fiber.dom = createDom(fiber)!;
+  }
+  // TODO create new fibers
+  const elements = fiber.props.children;
+  let index = 0;
+  let prevSibling: Fiber | null = null;
+
+  while (index < elements.length) {
+    const element = elements[index];
+    const newFiber: Fiber = {
+      type: element.type,
+      props: element.props,
+      dom: null,
+      parent: fiber,
+      sibling: null,
+      child: null,
+    };
+
+    if (index === 0) {
+      fiber.child = newFiber;
+    } else if (prevSibling) {
+      prevSibling.sibling = newFiber;
+    }
+
+    prevSibling = newFiber;
+    index++;
+  }
+  // TODO return next unit of work
+  if (fiber.child) {
+    return fiber.child;
+  }
+  let nextFiber: Fiber | null = fiber;
+  while (nextFiber) {
+    if (nextFiber.sibling) {
+      return nextFiber.sibling;
+    }
+    nextFiber = nextFiber.parent;
+  }
+  return nextFiber;
+}
 
 const Didact = {
   createElement,
@@ -83,7 +165,7 @@ const Didact = {
 
 (window as any).Didact = Didact;
 
-const element = (
+const fiber = (
   <div>
     <h1>Hello World</h1>
     <label htmlFor="search">Search: </label>
@@ -93,4 +175,4 @@ const element = (
 
 const container = document.getElementById("app")!;
 
-Didact.render(element, container);
+Didact.render(fiber, container);
