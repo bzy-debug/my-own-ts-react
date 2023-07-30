@@ -43,7 +43,7 @@ function createTextElement(text: string): DidactElement {
   };
 }
 
-function render(element: DidactElement, container: HTMLElement | Text) {
+function render(element: DidactElement, container: HTMLElement) {
   const dom =
     element.type === "TEXT_ELEMENT"
       ? document.createTextNode("")
@@ -56,10 +56,25 @@ function render(element: DidactElement, container: HTMLElement | Text) {
       (dom as any)[name] = element.props[name];
     });
 
-  element.props.children.forEach((child) => render(child, dom));
+  element.props.children.forEach((child) => render(child, dom as HTMLElement));
 
   container.appendChild(dom);
 }
+
+// let nextUnitOfWork = null;
+
+// function workLoop(deadline: IdleDeadline) {
+//   let shouldYield = false;
+//   while (nextUnitOfWork && !shouldYield) {
+//     nextUnitOfWork = performUnitOfWork(nextUnitOfWork);
+//     shouldYield = deadline.timeRemaining() < 1;
+//   }
+//   requestIdleCallback(workLoop);
+// }
+
+// requestIdleCallback(workLoop);
+
+// function performUnitOfWork(nextUnitOfWork) {}
 
 const Didact = {
   createElement,
